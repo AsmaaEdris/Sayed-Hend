@@ -35,7 +35,13 @@
           --cd-lbl: rgba(196,169,122,0.75);
         }
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:100%;overflow-x:hidden;scroll-behavior:smooth}
+        html,body{width:100%;overflow-x:hidden;  scroll-snap-type: none !important;
+    scroll-behavior: auto !important;
+}
+section {
+    /* التأكد أن السكاشن لا تمنع السكرول */
+    overflow: visible !important;
+}
         body{font-family:'Amiri',serif;background:var(--cream);color:var(--text)}
 
         /* ══ PETALS ══ */
@@ -784,133 +790,177 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        /* ══ PETALS ══ */
-        (function(){
-                const items = ['🌸', '🌷', '🌹'];
-              const count = window.innerWidth < 768 ? 8 : 20;
-                for(let i = 0; i < count; i++) {
-                const el = document.createElement('div');
-                el.className = 'petal';
-                el.textContent = items[i % 3];
-                el.style.cssText = `left:${Math.random()*100}%;font-size:${10+Math.random()*10}px;animation-duration:${10+Math.random()*12}s;animation-delay:${Math.random()*15}s`;
-                document.body.appendChild(el);
-              }
-            })();
+let envelopeOpened = false;
+let autoScrollActive = false;
+let scrollControl;
+let resumeTimeout;
 
-        /* ══ COUNTDOWN ══ */
-        function tick(){
-          const target=new Date('2026-08-02T19:00:00+02:00'),diff=target-new Date();
-          if(diff<0)return;
-          const pad=v=>String(v).padStart(2,'0');
-          const d=pad(Math.floor(diff/86400000));
-          const h=pad(Math.floor(diff%86400000/3600000));
-          const m=pad(Math.floor(diff%3600000/60000));
-          const s=pad(Math.floor(diff%60000/1000));
-          [['wlD',d],['wlH',h],['wlM',m],['wlS',s]].forEach(([id,v])=>{
-            const el=document.getElementById(id);if(el)el.textContent=v;
-          });
-        }
-        setInterval(tick,1000);tick();
-let autoScrolling = false;
-let autoScrollPaused = false;
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// سرعة السكرول: يمكنك تعديلها (0.8 هادئة جداً - 1.5 سريعة)
+const scrollSpeed = isMobile ? 0.9 : .9;
 
+/* ══════════════════════════════════════════════════════
+    2. SMART AUTO SCROLL ENGINE
+══════════════════════════════════════════════════════ */
 function startAutoScroll() {
-    if (autoScrolling) return;
-
-    autoScrolling = true;
-    autoScrollPaused = false;
-
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-    // سرعة أعلى
-    const speed = isMobile ? 3.5 : 2.2;
+    if (!envelopeOpened || autoScrollActive) return;
+    autoScrollActive = true;
 
     function step() {
-        if (!autoScrolling) return;
+        if (!autoScrollActive) return;
 
-        if (!autoScrollPaused) {
-            window.scrollBy(0, speed);
+        window.scrollBy(0, scrollSpeed);
+
+        // التحقق من الوصول للنهاية
+        const isEnd = (window.innerHeight + window.pageYOffset) >= (document.body.scrollHeight - 5);
+        
+        if (isEnd) {
+            autoScrollActive = false;
+            cancelAnimationFrame(scrollControl);
+        } else {
+            scrollControl = requestAnimationFrame(step);
         }
-
-        // نهاية الصفحة
-        if ((window.innerHeight + window.scrollY) >= document.body.scrollHeight - 5) {
-            autoScrolling = false;
-            return;
-        }
-
-        requestAnimationFrame(step);
     }
-
-    requestAnimationFrame(step);
+    scrollControl = requestAnimationFrame(step);
 }
 
-/* يوقف مؤقت أثناء السكرول اليدوي */
-let scrollTimeout;
-
-function pauseAutoScrollTemporarily() {
-    autoScrollPaused = true;
-
-    clearTimeout(scrollTimeout);
-
-    scrollTimeout = setTimeout(() => {
-        autoScrollPaused = false;
-    }, 1200); // بعد 1.2 ثانية يرجع يشتغل
+function stopAutoScroll() {
+    autoScrollActive = false;
+    cancelAnimationFrame(scrollControl);
+    clearTimeout(resumeTimeout);
 }
 
-/* دعم اللمس + الماوس + الويل */
-window.addEventListener("touchstart", pauseAutoScrollTemporarily, { passive: true });
-window.addEventListener("wheel", pauseAutoScrollTemporarily, { passive: true });
-window.addEventListener("mousedown", pauseAutoScrollTemporarily);
+// التحكم باليد: يوقف السكرول فوراً ويعيده بعد ثانية ونصف من التوقف
+function handleUserInteraction() {
+    if (!envelopeOpened) return;
+    stopAutoScroll();
+    resumeTimeout = setTimeout(() => {
+        startAutoScroll();
+    }, 1500); 
+}
 
-let envelopeOpened = false;
-function openEnvelope(){
+window.addEventListener("touchstart", handleUserInteraction, { passive: true });
+window.addEventListener("wheel", handleUserInteraction, { passive: true });
+window.addEventListener("mousedown", handleUserInteraction, { passive: true });
+
+/* ══════════════════════════════════════════════════════
+    3. FLOWERS / PETALS ANIMATION
+══════════════════════════════════════════════════════ */
+(function initPetals() {
+    const items = ['🌸', '🌷', '🌹'];
+    const count = isMobile ? 8 : 18;
+    for (let i = 0; i < count; i++) {
+        const el = document.createElement('div');
+        el.className = 'petal';
+        el.textContent = items[i % 3];
+        el.style.cssText = `
+            left:${Math.random() * 100}%;
+            font-size:${9 + Math.random() * 9}px;
+            animation-duration:${11 + Math.random() * 12}s;
+            animation-delay:${Math.random() * 16}s;
+            will-change: transform;
+        `;
+        document.body.appendChild(el);
+    }
+})();
+
+/* ══════════════════════════════════════════════════════
+    4. COUNTDOWN TIMER
+══════════════════════════════════════════════════════ */
+function tick() {
+    const target = new Date('2026-06-20T19:00:00').getTime();
+    const now = new Date().getTime();
+    const diff = target - now;
+
+    if (diff < 0) return;
+
+    const pad = v => String(v).padStart(2, '0');
+    const d = pad(Math.floor(diff / (1000 * 60 * 60 * 24)));
+    const h = pad(Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+    const m = pad(Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)));
+    const s = pad(Math.floor((diff % (1000 * 60)) / 1000));
+
+    const els = { 'wlD': d, 'wlH': h, 'wlM': m, 'wlS': s };
+    for (let id in els) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = els[id];
+    }
+}
+setInterval(tick, 1000);
+tick();
+
+/* ══════════════════════════════════════════════════════
+    5. ENVELOPE LOGIC & REVEAL
+══════════════════════════════════════════════════════ */
+const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+        if (e.isIntersecting) {
+            e.target.classList.add('visible');
+            observer.unobserve(e.target);
+        }
+    });
+}, { threshold: 0.1 });
+
+function openEnvelope() {
     if (envelopeOpened) return;
     envelopeOpened = true;
 
     const screen = document.getElementById('env-screen');
-    const video  = document.getElementById('envVideo');
-    const music  = document.getElementById('bgMusic');
-    const hero   = document.getElementById("heroVideo");
+    const video = document.getElementById('envVideo');
+    const music = document.getElementById('bgMusic');
+    const hero = document.getElementById("heroVideo");
+    const invitation = document.getElementById('invitation');
 
     screen.classList.add('tapped');
+    video.play().catch(() => {});
 
-    video.play();
-
-    video.onended = function () {
-        music.volume = 0.55;
-        music.play().catch(() => {});
-        hero.currentTime = 0;
-        hero.play();
-
+    video.onended = function() {
         screen.classList.add('hide');
-        document.getElementById('invitation').classList.add('show');
+        invitation.classList.add('show');
+        
+        music.volume = 0.4;
+        music.play().catch(() => {});
 
-        document.querySelectorAll('.s-savedate .reveal')
-            .forEach(el => el.classList.add('visible'));
+        if (hero) {
+            hero.muted = true;
+            hero.play().catch(() => {});
+        }
 
-        document.querySelectorAll('.reveal:not(.visible)')
-            .forEach(el => observer.observe(el));
-
-        // يبدأ بعد 3 ثواني
-        setTimeout(() => {
-            startAutoScroll();
-        }, 3000);
+        // إظهار العناصر المخفية
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+        
+        // تشغيل السكرول التلقائي بعد انتهاء الفيديو بـ نصف ثانية
+        setTimeout(startAutoScroll, 500);
     };
 }
 
-        /* ══ SCROLL REVEAL ══ */
-        const observer=new IntersectionObserver(entries=>{
-          entries.forEach(e=>{
-            if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target);}
-          });
-        },{threshold:.1});
+/* ══════════════════════════════════════════════════════
+    6. PERFORMANCE: HERO VIDEO PAUSE
+══════════════════════════════════════════════════════ */
+window.addEventListener('scroll', () => {
+    const hero = document.getElementById("heroVideo");
+    if (!hero) return;
+    
+    const rect = hero.getBoundingClientRect();
+    const isVisible = rect.bottom > 0 && rect.top < window.innerHeight;
+    
+    if (isVisible) {
+        if (hero.paused) hero.play().catch(() => {});
+    } else {
+        if (!hero.paused) hero.pause();
+    }
+}, { passive: true });
 
-        /* ══ TOAST ══ */
-        function showToast(msg){
-          const t=document.getElementById('toast');
-          t.textContent=msg;t.classList.add('show');
-          setTimeout(()=>t.classList.remove('show'),3500);
-        }
+/* ══════════════════════════════════════════════════════
+    7. UTILS
+══════════════════════════════════════════════════════ */
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+}
     </script><div class="petal" style="left: 62.8502%; font-size: 19.5949px; animation-duration: 15.3408s; animation-delay: 12.5817s;">🌸</div><div class="petal" style="left: 18.5009%; font-size: 15.0259px; animation-duration: 15.0767s; animation-delay: 1.93628s;">🌷</div><div class="petal" style="left: 96.2128%; font-size: 14.4988px; animation-duration: 18s; animation-delay: 5.2941s;">🌹</div><div class="petal" style="left: 7.38084%; font-size: 16.5509px; animation-duration: 14.3498s; animation-delay: 14.5139s;">🌸</div><div class="petal" style="left: 37.4031%; font-size: 14.3139px; animation-duration: 21.5329s; animation-delay: 0.828249s;">🌷</div><div class="petal" style="left: 44.7084%; font-size: 12.1658px; animation-duration: 10.7984s; animation-delay: 11.2418s;">🌹</div><div class="petal" style="left: 31.352%; font-size: 13.4775px; animation-duration: 14.0765s; animation-delay: 9.04059s;">🌸</div><div class="petal" style="left: 2.94761%; font-size: 11.6696px; animation-duration: 11.1744s; animation-delay: 0.413409s;">🌷</div><div class="petal" style="left: 98.2545%; font-size: 14.6479px; animation-duration: 13.8764s; animation-delay: 14.0033s;">🌹</div><div class="petal" style="left: 45.1234%; font-size: 18.6119px; animation-duration: 18.238s; animation-delay: 12.9274s;">🌸</div><div class="petal" style="left: 39.5655%; font-size: 16.1508px; animation-duration: 11.9727s; animation-delay: 1.78795s;">🌷</div><div class="petal" style="left: 25.536%; font-size: 17.7205px; animation-duration: 18.5923s; animation-delay: 7.52268s;">🌹</div><div class="petal" style="left: 18.3233%; font-size: 17.0757px; animation-duration: 18.2225s; animation-delay: 7.86962s;">🌸</div><div class="petal" style="left: 45.3548%; font-size: 11.7188px; animation-duration: 16.8363s; animation-delay: 11.1978s;">🌷</div><div class="petal" style="left: 56.667%; font-size: 18.6584px; animation-duration: 14.8124s; animation-delay: 4.66827s;">🌹</div><div class="petal" style="left: 51.0964%; font-size: 15.6217px; animation-duration: 18.6134s; animation-delay: 11.696s;">🌸</div><div class="petal" style="left: 45.3869%; font-size: 15.0137px; animation-duration: 11.0741s; animation-delay: 5.79254s;">🌷</div><div class="petal" style="left: 70.0537%; font-size: 19.3047px; animation-duration: 17.411s; animation-delay: 10.4132s;">🌹</div><div class="petal" style="left: 84.2896%; font-size: 11.5794px; animation-duration: 16.9389s; animation-delay: 0.881976s;">🌸</div><div class="petal" style="left: 82.1091%; font-size: 17.1634px; animation-duration: 18.0312s; animation-delay: 1.3752s;">🌷</div>
 
 
